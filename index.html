@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avatar Speaking Video Player</title>
+  <link href="https://vjs.zencdn.net/7.21.1/video-js.css" rel="stylesheet" />
+  <style>
+    #info {
+      margin-top: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+    }
+    .highlight {
+      font-weight: bold;
+      color: #2c3e50;
+    }
+  </style>
+</head>
+<body>
+  <h1>Avatar Speaking Video Player</h1>
+  <input type="file" id="wav-input" accept="audio/wav" />
+  <audio id="audio-player" controls></audio> <!-- WAV 소리 출력 -->
+  <video
+    id="video-player"
+    class="video-js vjs-default-skin"
+    width="640"
+    height="360"
+    autoplay
+    muted
+    playsinline
+  ></video>
+
+  <!-- 재생 정보 표시 -->
+  <div id="info">
+    <p>총 재생 시간: <span id="total-duration" class="highlight">0</span> 초</p>
+    <p>현재 재생 시간: <span id="current-play-time" class="highlight">0</span> 초</p>
+    <p>선택된 비디오 목록:</p>
+    <ul id="video-list"></ul>
+  </div>
+
+  <script src="https://vjs.zencdn.net/7.21.1/video.min.js"></script>
+  <script>
+    // 랜덤으로 재생될 비디오 목록
+    const videoFiles = [
+      { src: 'video1.mp4', duration: 2 },
+      { src: 'video2.mp4', duration: 2 },
+      { src: 'video3.mp4', duration: 2 }
+    ];
+
+    // 침묵 비디오
+    const silentVideo = { src: 'silent.mp4', duration: 1 };
+
+    // 직전 비디오를 중복되지 않게 랜덤하게 선택
+    function getRandomVideo(exclude) {
+      const filteredVideos = videoFiles.filter(video => video !== exclude);
+      return filteredVideos[Math.floor(Math.random() * filteredVideos.length)];
+    }
+
+    // WAV 길이만큼 비디오를 랜덤하게 선택 (마지막에 침묵 비디오 추가)
+    function getRandomVideos(targetDuration) {
+      let totalDuration = 0;
+      const selectedVideos = [];
+      let lastVideo = null;
+
+      while (totalDuration + silentVideo.duration <= targetDuration) {
+        const randomVideo = getRandomVideo(lastVideo);
+        const remainingTime = targetDuration - totalDuration - silentVideo.duration;
+
+        // 랜덤 비디오 추가 (침묵 비디오가 들어갈 여유를 남김)
+        if (randomVideo.duration <= remainingTime) {
+          selectedVideos.push(randomVideo);
+          totalDuration += randomVideo.duration;
+          lastVideo = randomVideo; // 직전 비디오 기록
+        } else {
+          break;
+        }
+      }
+
+      // 마지막에 침묵 비디오 추가
+      if (totalDuration + silentVideo.duration <= targetDuration) {
+        selectedVideos.push(silentVideo);
+        totalDuration += silentVideo.duration;
+      }
+
+      return selectedVideos;
+    }
+
+    // WAV 파일 길이 가져오기
+    async function getWavDuration(file) {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      return audioBuffer.duration; // 초 단위 반환
+    }
+
+    // 동영상 미리 로드
+    function preloadVideos(videoQueue) {
+      videoQueue.forEach(video => {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'video';
+        link.href = video.src;
+        document.head.appendChild(link);
+      });
+    }
+
+    // 비디오 플레이어 설정
+    const player = videojs('video-player', {
+      controls: false, // 컨트롤 비활성화
+    });
+    const audioPlayer = document.getElementById('audio-player');
+
+    // 현재 재생 시간 카운터
+    let currentPlayTime = 0;
+    const currentPlayTimeElement = document.getElementById('current-play-time');
+
+    // WAV 파일 입력 이벤트
+    document.getElementById('wav-input').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // WAV 파일 길이 계산 및 소리 재생
+      const wavLength = await getWavDuration(file);
+      console.log(`WAV 파일 길이: ${wavLength} 초`);
+      audioPlayer.src = URL.createObjectURL(file);
+      audioPlayer.play();
+
+      // 비디오 큐 생성
+      const videoQueue = getRandomVideos(wavLength);
+
+      // 동영상 미리 로드
+      preloadVideos(videoQueue);
+
+      // 화면에 재생 정보 표시
+      const totalDurationElement = document.getElementById('total-duration');
+      const videoListElement = document.getElementById('video-list');
+
+      // 총 재생 시간 계산 및 표시
+      const totalPlayTime = videoQueue.reduce((acc, video) => acc + video.duration, 0);
+      totalDurationElement.textContent = totalPlayTime;
+
+      // 선택된 비디오 목록 표시
+      videoListElement.innerHTML = ''; // 기존 목록 초기화
+      videoQueue.forEach(video => {
+        const listItem = document.createElement('li');
+        listItem.textContent = `${video.src} (${video.duration}초)`;
+        videoListElement.appendChild(listItem);
+      });
+
+      // 비디오 재생 시작
+      let currentIndex = 0;
+
+      function playNextVideo() {
+        if (currentIndex < videoQueue.length) {
+          const video = videoQueue[currentIndex];
+          player.src({ src: video.src, type: 'video/mp4' });
+          player.play();
+          currentIndex++;
+        } else {
+          console.log('All videos played. WAV duration reached.');
+          player.pause();
+        }
+      }
+
+      // 비디오가 끝날 때 다음 비디오 재생
+      player.off('ended'); // 이전 이벤트 제거
+      player.on('ended', playNextVideo);
+
+      // 실시간 재생 시간 업데이트
+      clearInterval(currentPlayTime); // 기존 카운터 초기화
+      currentPlayTime = 0;
+      const playTimer = setInterval(() => {
+        currentPlayTime++;
+        currentPlayTimeElement.textContent = currentPlayTime;
+        if (currentPlayTime >= totalPlayTime) clearInterval(playTimer);
+      }, 1000);
+
+      // 첫 번째 비디오 재생
+      playNextVideo();
+    });
+  </script>
+</body>
+</html>
