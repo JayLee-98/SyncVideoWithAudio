@@ -15,7 +15,7 @@ This project synchronizes a video playlist with the duration of a WAV audio file
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/random-video-player.git
+   git clone https://github.com/yourusername/random-video-player.git 
    ```
    
 2. Navigate to the project directory:
