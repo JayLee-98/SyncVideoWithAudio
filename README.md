@@ -1,4 +1,4 @@
-# Random Video Player with WAV Sync   
+# Random Video Player with WAV Sync    
 
 This project synchronizes a video playlist with the duration of a WAV audio file. The application selects random videos and ensures they play in sync with the audio file's duration.
 
